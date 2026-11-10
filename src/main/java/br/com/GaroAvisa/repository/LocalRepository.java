@@ -23,4 +23,12 @@ public interface LocalRepository extends JpaRepository<Local, Long> {
     Page<Local> buscarDoUsuario(@Param("usuarioId") Long usuarioId,
                                 @Param("busca") String busca,
                                 Pageable pageable);
+    
+    
+ // POST /locais: o primeiro local vira principal
+    long countByUsuarioId(Long usuarioId);
+
+    // POST /locais: apelido único por usuário
+    boolean existsByUsuarioIdAndApelido(Long usuarioId, String apelido);
+
 }

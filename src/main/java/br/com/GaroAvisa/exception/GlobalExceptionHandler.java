@@ -51,4 +51,14 @@ public class GlobalExceptionHandler {
         problema.setTitle(titulo);
         return problema;
     }
+    
+    @ExceptionHandler(ApelidoJaCadastradoException.class)
+    public ProblemDetail apelidoJaCadastrado(ApelidoJaCadastradoException ex) {
+        return problema(HttpStatus.CONFLICT, "Apelido já cadastrado", ex.getMessage());
+    }
+
+    @ExceptionHandler(FusoInvalidoException.class)
+    public ProblemDetail fusoInvalido(FusoInvalidoException ex) {
+        return problema(HttpStatus.BAD_REQUEST, "Dados inválidos", ex.getMessage());
+    }
 }
