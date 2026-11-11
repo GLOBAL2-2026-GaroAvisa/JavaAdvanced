@@ -13,6 +13,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import br.com.GaroAvisa.dto.AlterarAlertasRequest;
 import br.com.GaroAvisa.dto.CriarLocalRequest;
 import br.com.GaroAvisa.dto.LocalCardResponse;
 import br.com.GaroAvisa.dto.PaginaResponse;
@@ -120,6 +121,18 @@ public class LocalService {
 
 		}
 
+	}
+	
+	// ---------- PATCH /locais/{id}/alertas ----------
+	@Transactional
+	public LocalCardResponse alterarAlertas(Long usuarioId, Long localId, AlterarAlertasRequest requisicao) {
+
+		Local local = localRepository.findByIdAndUsuarioId(usuarioId, localId)
+				.orElseThrow(() -> new RecursoNaoEncontradoException("Local não encontrado"));
+
+		local.setReceberAlertas(requisicao.receberAlertas());
+
+		return LocalCardResponse.de(local);
 	}
 
 	// ---------- Auxiliares ----------
