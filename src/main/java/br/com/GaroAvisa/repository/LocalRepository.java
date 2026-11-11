@@ -1,5 +1,8 @@
 package br.com.GaroAvisa.repository;
 
+import java.util.List;
+import java.util.Optional;
+
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.EntityGraph;
@@ -30,5 +33,19 @@ public interface LocalRepository extends JpaRepository<Local, Long> {
 
     // POST /locais: apelido único por usuário
     boolean existsByUsuarioIdAndApelido(Long usuarioId, String apelido);
-
+    
+    
+    @Query("""
+    		SELECT l FROM Local l
+    		WHERE l.usuario.id = :usuarioId
+    		ORDER BY l.id ASC
+    		""")
+    List<Local> listarPorUsuario(Long usuarioId);
+    
+    @Query("""
+    		SELECT l FROM Local l
+    		WHERE l.usuario.id = :usuarioId AND l.id = :localId
+    		ORDER BY l.principal ASC
+    		""")
+    Optional<Local> findByIdAndUsuarioId(Long usuarioId, Long localId);
 }

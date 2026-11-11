@@ -4,6 +4,8 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.DateTimeException;
 import java.time.ZoneId;
+import java.util.List;
+import java.util.Optional;
 
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
@@ -16,6 +18,7 @@ import br.com.GaroAvisa.dto.LocalCardResponse;
 import br.com.GaroAvisa.dto.PaginaResponse;
 import br.com.GaroAvisa.exception.ApelidoJaCadastradoException;
 import br.com.GaroAvisa.exception.FusoInvalidoException;
+import br.com.GaroAvisa.exception.RecursoNaoEncontradoException;
 import br.com.GaroAvisa.model.Endereco;
 import br.com.GaroAvisa.model.Local;
 import br.com.GaroAvisa.model.Usuario;
@@ -28,92 +31,115 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public class LocalService {
 
-    private static final int TAMANHO_PADRAO = 10;
-    private static final int TAMANHO_MAXIMO = 50;
-    private static final int CASAS_COORDENADA = 6; // mesmo do NUMBER(9,6)
+	private static final int TAMANHO_PADRAO = 10;
+	private static final int TAMANHO_MAXIMO = 50;
+	private static final int CASAS_COORDENADA = 6; // mesmo do NUMBER(9,6)
 
-    private final LocalRepository localRepository;
-    private final EnderecoRepository enderecoRepository;
-    private final UsuarioRepository usuarioRepository;
+	private final LocalRepository localRepository;
+	private final EnderecoRepository enderecoRepository;
+	private final UsuarioRepository usuarioRepository;
 
-    @Transactional(readOnly = true)
-    public PaginaResponse<LocalCardResponse> listar(Long usuarioId, String busca,
-                                                     Integer pagina, Integer tamanho) {
+	@Transactional(readOnly = true)
+	public PaginaResponse<LocalCardResponse> listar(Long usuarioId, String busca, Integer pagina, Integer tamanho) {
 
-        int paginaAjustada = (pagina == null || pagina < 0) ? 0 : pagina;
-        int tamanhoAjustado = (tamanho == null || tamanho < 1) ? TAMANHO_PADRAO
-                : Math.min(tamanho, TAMANHO_MAXIMO);
-        String buscaAjustada = (busca == null || busca.isBlank()) ? null : busca.trim();
+		int paginaAjustada = (pagina == null || pagina < 0) ? 0 : pagina;
+		int tamanhoAjustado = (tamanho == null || tamanho < 1) ? TAMANHO_PADRAO : Math.min(tamanho, TAMANHO_MAXIMO);
+		String buscaAjustada = (busca == null || busca.isBlank()) ? null : busca.trim();
 
-        Page<Local> locais = localRepository.buscarDoUsuario(
-                usuarioId, buscaAjustada, PageRequest.of(paginaAjustada, tamanhoAjustado));
+		Page<Local> locais = localRepository.buscarDoUsuario(usuarioId, buscaAjustada,
+				PageRequest.of(paginaAjustada, tamanhoAjustado));
 
-        return PaginaResponse.de(locais, LocalCardResponse::de);
-    }
-    
- // ---------- POST /locais ----------
-    @Transactional
-    public LocalCardResponse criar(Long usuarioId, CriarLocalRequest requisicao) {
-        String apelido = requisicao.apelido().trim();
+		return PaginaResponse.de(locais, LocalCardResponse::de);
+	}
 
-        // 1. Apelido único por usuário
-        if (localRepository.existsByUsuarioIdAndApelido(usuarioId, apelido)) {
-            throw new ApelidoJaCadastradoException();
-        }
+	// ---------- POST /locais ----------
+	@Transactional
+	public LocalCardResponse criar(Long usuarioId, CriarLocalRequest requisicao) {
+		String apelido = requisicao.apelido().trim();
 
-        // 2. Fuso precisa existir
-        String fuso = validarFuso(requisicao.fuso());
+		// 1. Apelido único por usuário
+		if (localRepository.existsByUsuarioIdAndApelido(usuarioId, apelido)) {
+			throw new ApelidoJaCadastradoException();
+		}
 
-        // 3. Caminho 2: reaproveita o endereço ou cria um novo
-        Endereco endereco = buscarOuCriarEndereco(requisicao, fuso);
+		// 2. Fuso precisa existir
+		String fuso = validarFuso(requisicao.fuso());
 
-        // 4. Monta o local
-        Usuario usuario = usuarioRepository.getReferenceById(usuarioId);
-        Local local = new Local(usuario, endereco, apelido);
+		// 3. Caminho 2: reaproveita o endereço ou cria um novo
+		Endereco endereco = buscarOuCriarEndereco(requisicao, fuso);
 
-        // 5. Primeiro local do usuário vira principal
-        local.setPrincipal(localRepository.countByUsuarioId(usuarioId) == 0);
+		// 4. Monta o local
+		Usuario usuario = usuarioRepository.getReferenceById(usuarioId);
+		Local local = new Local(usuario, endereco, apelido);
 
-        // 6. receberAlertas: se não vier, fica true (padrão da entidade)
-        if (requisicao.receberAlertas() != null) {
-            local.setReceberAlertas(requisicao.receberAlertas());
-        }
+		// 5. Primeiro local do usuário vira principal
+		local.setPrincipal(localRepository.countByUsuarioId(usuarioId) == 0);
 
-        // 7. Grava
-        try {
-            localRepository.saveAndFlush(local);
-        } catch (DataIntegrityViolationException ex) {
-            // Dois pedidos simultâneos com o mesmo apelido: a UNIQUE do banco barra o segundo
-            throw new ApelidoJaCadastradoException();
-        }
+		// 6. receberAlertas: se não vier, fica true (padrão da entidade)
+		if (requisicao.receberAlertas() != null) {
+			local.setReceberAlertas(requisicao.receberAlertas());
+		}
 
-        return LocalCardResponse.de(local);
-    }
+		// 7. Grava
+		try {
+			localRepository.saveAndFlush(local);
+		} catch (DataIntegrityViolationException ex) {
+			// Dois pedidos simultâneos com o mesmo apelido: a UNIQUE do banco barra o
+			// segundo
+			throw new ApelidoJaCadastradoException();
+		}
 
-    // ---------- Auxiliares ----------
+		return LocalCardResponse.de(local);
+	}
 
-    private String validarFuso(String fuso) {
-        String fusoAjustado = fuso.trim();
-        try {
-            ZoneId.of(fusoAjustado);
-        } catch (DateTimeException ex) {
-            throw new FusoInvalidoException(fusoAjustado);
-        }
-        return fusoAjustado;
-    }
+	// ---------- DELETE /locais ----------
+	@Transactional
+	public void remover(Long usuarioId, Long localId) {
 
-    private Endereco buscarOuCriarEndereco(CriarLocalRequest requisicao, String fuso) {
-        BigDecimal latitude = requisicao.latitude().setScale(CASAS_COORDENADA, RoundingMode.HALF_UP);
-        BigDecimal longitude = requisicao.longitude().setScale(CASAS_COORDENADA, RoundingMode.HALF_UP);
+		Optional<Local> opLocal = localRepository.findByIdAndUsuarioId(usuarioId, localId);
 
-        return enderecoRepository.findByLatitudeAndLongitude(latitude, longitude)
-                .orElseGet(() -> enderecoRepository.save(new Endereco(
-                        requisicao.pais().trim(),
-                        requisicao.estado().trim(),
-                        requisicao.cidade().trim(),
-                        requisicao.bairro().trim(),
-                        latitude,
-                        longitude,
-                        fuso)));
-    }
+		if (opLocal.isEmpty()) {
+			throw new RecursoNaoEncontradoException("Local não encontrado");
+		}
+
+		Local localApagado = opLocal.get();
+
+		localRepository.deleteById(localId);
+		localRepository.flush();
+
+		if (localApagado.getPrincipal()) {
+			// local apagado era o principal
+
+			List<Local> locais = localRepository.listarPorUsuario(usuarioId);
+
+			if (!locais.isEmpty()) {
+				Local novoLocalPrincipal = locais.getFirst();
+				novoLocalPrincipal.setPrincipal(true);
+				localRepository.save(novoLocalPrincipal);
+			}
+
+		}
+
+	}
+
+	// ---------- Auxiliares ----------
+
+	private String validarFuso(String fuso) {
+		String fusoAjustado = fuso.trim();
+		try {
+			ZoneId.of(fusoAjustado);
+		} catch (DateTimeException ex) {
+			throw new FusoInvalidoException(fusoAjustado);
+		}
+		return fusoAjustado;
+	}
+
+	private Endereco buscarOuCriarEndereco(CriarLocalRequest requisicao, String fuso) {
+		BigDecimal latitude = requisicao.latitude().setScale(CASAS_COORDENADA, RoundingMode.HALF_UP);
+		BigDecimal longitude = requisicao.longitude().setScale(CASAS_COORDENADA, RoundingMode.HALF_UP);
+
+		return enderecoRepository.findByLatitudeAndLongitude(latitude, longitude).orElseGet(
+				() -> enderecoRepository.save(new Endereco(requisicao.pais().trim(), requisicao.estado().trim(),
+						requisicao.cidade().trim(), requisicao.bairro().trim(), latitude, longitude, fuso)));
+	}
 }
