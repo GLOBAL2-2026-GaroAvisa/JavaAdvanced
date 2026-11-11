@@ -15,6 +15,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import br.com.GaroAvisa.dto.AlterarAlertasRequest;
 import br.com.GaroAvisa.dto.CriarLocalRequest;
+import br.com.GaroAvisa.dto.EditarLocalRequest;
 import br.com.GaroAvisa.dto.LocalCardResponse;
 import br.com.GaroAvisa.dto.PaginaResponse;
 import br.com.GaroAvisa.exception.ApelidoJaCadastradoException;
@@ -134,6 +135,47 @@ public class LocalService {
 
 		return LocalCardResponse.de(local);
 	}
+	
+	// ---------- PUT /locais/{id} ----------
+    @Transactional
+    public LocalCardResponse editar(Long usuarioId, Long localId, EditarLocalRequest requisicao) {
+
+        Local local = localRepository.findByIdAndUsuarioId(usuarioId, localId)
+                .orElseThrow(() -> new RecursoNaoEncontradoException("Local não encontrado"));
+
+        String apelido = requisicao.apelido().trim();
+
+        // 1. Apelido único, sem contar o próprio local
+        if (localRepository.existsByUsuarioIdAndApelidoAndIdNot(usuarioId, apelido, localId)) {
+            throw new ApelidoJaCadastradoException();
+        }
+
+        // 2. Desmarcou o principal: o usuário fica sem principal (estado válido)
+        if (!requisicao.principal() && local.getPrincipal()) {
+            local.setPrincipal(false);
+        }
+
+        // 3. Virou principal: desmarca o antigo ANTES de marcar este
+        if (requisicao.principal() && !local.getPrincipal()) {
+            localRepository.findByUsuarioIdAndPrincipal(usuarioId, true)
+                    .ifPresent(antigo -> antigo.setPrincipal(false));
+            localRepository.flush();
+            local.setPrincipal(true);
+        }
+
+        // 4. Demais campos
+        local.setApelido(apelido);
+        local.setReceberAlertas(requisicao.receberAlertas());
+
+        // 5. Grava agora, para capturar apelido duplicado em pedidos simultâneos
+        try {
+            localRepository.flush();
+        } catch (DataIntegrityViolationException ex) {
+            throw new ApelidoJaCadastradoException();
+        }
+
+        return LocalCardResponse.de(local);
+    }
 
 	// ---------- Auxiliares ----------
 

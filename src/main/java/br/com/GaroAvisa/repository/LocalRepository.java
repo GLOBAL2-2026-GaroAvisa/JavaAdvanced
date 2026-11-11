@@ -48,4 +48,12 @@ public interface LocalRepository extends JpaRepository<Local, Long> {
     		ORDER BY l.principal ASC
     		""")
     Optional<Local> findByIdAndUsuarioId(Long usuarioId, Long localId);
+    
+    
+    // PUT /locais/{id}: apelido único, ignorando o próprio local
+    boolean existsByUsuarioIdAndApelidoAndIdNot(Long usuarioId, String apelido, Long id);
+
+    // PUT /locais/{id}: encontra o principal atual para desmarcar
+    Optional<Local> findByUsuarioIdAndPrincipal(Long usuarioId, Boolean principal);
+
 }
