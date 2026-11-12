@@ -10,7 +10,6 @@ import org.springframework.web.bind.annotation.RestController;
 import br.com.GaroAvisa.dto.CadastroRequest;
 import br.com.GaroAvisa.dto.LoginRequest;
 import br.com.GaroAvisa.dto.TokenResponse;
-import br.com.GaroAvisa.dto.UsuarioResponse;
 import br.com.GaroAvisa.service.AuthService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirements;
@@ -27,10 +26,10 @@ public class AuthController {
 
     private final AuthService authService;
 
-    @Operation(summary = "Cadastrar usuário")
+    @Operation(summary = "Cadastrar usuário e já fazer login")
     @PostMapping("/cadastro")
     @ResponseStatus(HttpStatus.CREATED)
-    public UsuarioResponse cadastrar(@RequestBody @Valid CadastroRequest requisicao) {
+    public TokenResponse cadastrar(@RequestBody @Valid CadastroRequest requisicao) {
         return authService.cadastrar(requisicao);
     }
 

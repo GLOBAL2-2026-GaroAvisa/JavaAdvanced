@@ -10,7 +10,6 @@ import org.springframework.transaction.annotation.Transactional;
 import br.com.GaroAvisa.dto.CadastroRequest;
 import br.com.GaroAvisa.dto.LoginRequest;
 import br.com.GaroAvisa.dto.TokenResponse;
-import br.com.GaroAvisa.dto.UsuarioResponse;
 import br.com.GaroAvisa.exception.CredenciaisInvalidasException;
 import br.com.GaroAvisa.exception.EmailJaCadastradoException;
 import br.com.GaroAvisa.model.Usuario;
@@ -26,7 +25,7 @@ public class AuthService {
     private final TokenService tokenService;
 
     @Transactional
-    public UsuarioResponse cadastrar(CadastroRequest requisicao) {
+    public TokenResponse cadastrar(CadastroRequest requisicao) {
         String email = normalizarEmail(requisicao.email());
 
         if (usuarioRepository.existsByEmail(email)) {
@@ -44,7 +43,7 @@ public class AuthService {
             throw new EmailJaCadastradoException();
         }
 
-        return UsuarioResponse.de(usuario);
+        return tokenService.gerar(usuario);
     }
 
     @Transactional(readOnly = true)

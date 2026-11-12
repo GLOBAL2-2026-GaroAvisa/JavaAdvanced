@@ -61,4 +61,9 @@ public class GlobalExceptionHandler {
     public ProblemDetail fusoInvalido(FusoInvalidoException ex) {
         return problema(HttpStatus.BAD_REQUEST, "Dados inválidos", ex.getMessage());
     }
+    
+    @ExceptionHandler(DataNoPassadoException.class)
+    public ProblemDetail dataNoPassado(DataNoPassadoException ex) {
+        return problema(HttpStatus.BAD_REQUEST, "Dados inválidos", ex.getMessage());
+    }
 }
