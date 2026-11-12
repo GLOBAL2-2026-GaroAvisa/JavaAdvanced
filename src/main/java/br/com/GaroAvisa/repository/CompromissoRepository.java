@@ -1,6 +1,7 @@
 package br.com.GaroAvisa.repository;
 
 import java.time.LocalDate;
+import java.util.Optional;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -36,4 +37,9 @@ public interface CompromissoRepository extends JpaRepository<Compromisso, Long> 
     Page<Compromisso> buscarProximosDoLocal(@Param("localId") Long localId,
                                              @Param("aPartirDe") LocalDate aPartirDe,
                                              Pageable pageable);
+    
+    
+    // PUT e DELETE /compromissos/{id}: busca o compromisso só se for do usuário
+    @EntityGraph(attributePaths = "local")
+    Optional<Compromisso> findByIdAndLocalUsuarioId(Long id, Long usuarioId);
 }

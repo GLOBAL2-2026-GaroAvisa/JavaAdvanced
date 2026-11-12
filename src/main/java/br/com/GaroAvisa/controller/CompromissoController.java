@@ -6,6 +6,7 @@ import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
@@ -13,6 +14,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import br.com.GaroAvisa.dto.CompromissoResponse;
 import br.com.GaroAvisa.dto.CriarCompromissoRequest;
+import br.com.GaroAvisa.dto.EditarCompromissoRequest;
 import br.com.GaroAvisa.dto.PaginaResponse;
 import br.com.GaroAvisa.service.CompromissoService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -53,5 +55,13 @@ public class CompromissoController {
 			@RequestParam(required = false) Integer tamanho) {
 
 		return compromissoService.listarProximosDoLocal(Long.valueOf(jwt.getSubject()), LocalId, pagina, tamanho);
+	}
+	
+	@Operation(summary = "Editar nome, data e local de um compromisso")
+	@PutMapping("/compromissos/{CompromissoId}")
+	public CompromissoResponse editar(@AuthenticationPrincipal Jwt jwt, @PathVariable Long CompromissoId,
+			@RequestBody @Valid EditarCompromissoRequest requisicao) {
+
+		return compromissoService.editar(Long.valueOf(jwt.getSubject()), CompromissoId, requisicao);
 	}
 }

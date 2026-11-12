@@ -11,6 +11,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import br.com.GaroAvisa.dto.CompromissoResponse;
 import br.com.GaroAvisa.dto.CriarCompromissoRequest;
+import br.com.GaroAvisa.dto.EditarCompromissoRequest;
 import br.com.GaroAvisa.dto.PaginaResponse;
 import br.com.GaroAvisa.exception.DataNoPassadoException;
 import br.com.GaroAvisa.exception.RecursoNaoEncontradoException;
@@ -70,6 +71,28 @@ public class CompromissoService {
 
         return PaginaResponse.de(compromissos, CompromissoResponse::de);
     }
+    
+    // ---------- PUT /compromissos/{id} ----------
+    @Transactional
+    public CompromissoResponse editar(Long usuarioId, Long compromissoId, EditarCompromissoRequest requisicao) {
+
+        // 1. O compromisso precisa ser do usuário
+        Compromisso compromisso = compromissoRepository.findByIdAndLocalUsuarioId(compromissoId, usuarioId)
+                .orElseThrow(() -> new RecursoNaoEncontradoException("Compromisso não encontrado"));
+
+        // 2. O local de destino também precisa ser do usuário
+        Local novoLocal = buscarLocalDoUsuario(usuarioId, requisicao.localId());
+
+        // 3. Data no passado não é permitida (no fuso do NOVO local)
+        validarData(requisicao.data(), novoLocal);
+
+        // 4. Atualiza
+        compromisso.setNome(requisicao.nome().trim());
+        compromisso.setData(requisicao.data());
+        compromisso.setLocal(novoLocal);
+
+        return CompromissoResponse.de(compromisso);
+    }	
 
     // ---------- Auxiliares ----------
 
