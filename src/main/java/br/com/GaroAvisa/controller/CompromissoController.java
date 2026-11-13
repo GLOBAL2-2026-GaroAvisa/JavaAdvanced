@@ -3,6 +3,7 @@ package br.com.GaroAvisa.controller;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -63,5 +64,13 @@ public class CompromissoController {
 			@RequestBody @Valid EditarCompromissoRequest requisicao) {
 
 		return compromissoService.editar(Long.valueOf(jwt.getSubject()), CompromissoId, requisicao);
+	}
+	
+	@Operation(summary = "Excluir um compromisso do usuário logado")
+	@DeleteMapping("/compromissos/{CompromissoId}")
+	@ResponseStatus(HttpStatus.NO_CONTENT)
+	public void remover(@AuthenticationPrincipal Jwt jwt, @PathVariable Long CompromissoId) {
+
+		compromissoService.remover(Long.valueOf(jwt.getSubject()), CompromissoId);
 	}
 }

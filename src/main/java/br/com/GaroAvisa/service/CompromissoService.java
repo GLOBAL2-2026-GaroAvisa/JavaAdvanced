@@ -93,6 +93,16 @@ public class CompromissoService {
 
         return CompromissoResponse.de(compromisso);
     }	
+    
+    // ---------- DELETE /compromissos/{id} ----------
+    @Transactional
+    public void remover(Long usuarioId, Long compromissoId) {
+
+        Compromisso compromisso = compromissoRepository.findByIdAndLocalUsuarioId(compromissoId, usuarioId)
+                .orElseThrow(() -> new RecursoNaoEncontradoException("Compromisso não encontrado"));
+
+        compromissoRepository.delete(compromisso);
+    }
 
     // ---------- Auxiliares ----------
 
