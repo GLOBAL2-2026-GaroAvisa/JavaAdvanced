@@ -30,6 +30,9 @@ public class Usuario {
     @Enumerated(EnumType.STRING)
     @Column(name = "tipo_usuario", nullable = false, length = 10)
     private TipoUsuario tipo = TipoUsuario.USUARIO;
+    
+    @Column(name = "perfil_ia", length = 200)
+    private String perfilIa;
 
     // Configurações de notificação
     @Convert(converter = SimNaoConverter.class)

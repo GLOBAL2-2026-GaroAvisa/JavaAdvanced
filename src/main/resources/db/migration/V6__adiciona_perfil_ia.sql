@@ -1,0 +1,3 @@
+ALTER TABLE T_GA_USUARIO ADD (
+    perfil_ia VARCHAR2(200 CHAR)
+);
