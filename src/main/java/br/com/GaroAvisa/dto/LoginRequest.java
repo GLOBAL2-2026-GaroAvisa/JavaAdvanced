@@ -9,4 +9,8 @@ public record LoginRequest(
 
         @NotBlank(message = "A senha é obrigatória")
         String senha) {
+
+    public LoginRequest {
+        email = email == null ? null : email.trim().toLowerCase();
+    }
 }

@@ -16,11 +16,12 @@ public record CadastroRequest(
         @Size(max = 100, message = "O e-mail deve ter no máximo 100 caracteres")
         String email,
 
-        @NotBlank(message = "A senha é obrigatória")
-        @Size(max = 72, message = "A senha deve ter no máximo 72 caracteres")
+        @NotNull(message = "A senha é obrigatória")
+        @Size(min = 6, max = 72, message = "A senha deve ter entre 6 e 72 caracteres")
         String senha) {
 
     public CadastroRequest {
         nome = nome == null ? null : nome.trim();
+        email = email == null ? null : email.trim().toLowerCase();
     }
 }
