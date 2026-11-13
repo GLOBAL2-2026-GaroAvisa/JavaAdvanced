@@ -66,4 +66,11 @@ public class GlobalExceptionHandler {
     public ProblemDetail dataNoPassado(DataNoPassadoException ex) {
         return problema(HttpStatus.BAD_REQUEST, "Dados inválidos", ex.getMessage());
     }
+    
+    @ExceptionHandler(SenhaInvalidaException.class)
+    public ProblemDetail senhaInvalida(SenhaInvalidaException e) {
+        ProblemDetail problema = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, e.getMessage());
+        problema.setTitle("Senha inválida");
+        return problema;
+    }
 }
