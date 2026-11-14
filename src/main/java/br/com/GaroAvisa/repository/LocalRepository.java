@@ -20,7 +20,7 @@ public interface LocalRepository extends JpaRepository<Local, Long> {
            WHERE l.usuario.id = :usuarioId
              AND (:busca IS NULL
                   OR UPPER(l.apelido) LIKE UPPER(CONCAT('%', :busca, '%'))
-                  OR UPPER(e.bairro)  LIKE UPPER(CONCAT('%', :busca, '%')))
+                  OR UPPER(e.nome)  LIKE UPPER(CONCAT('%', :busca, '%')))
            ORDER BY l.principal DESC, l.apelido
            """)
     Page<Local> buscarDoUsuario(@Param("usuarioId") Long usuarioId,

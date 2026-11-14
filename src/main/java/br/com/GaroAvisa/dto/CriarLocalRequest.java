@@ -18,10 +18,10 @@ public record CriarLocalRequest(
         Boolean receberAlertas,
 
         // ----- Dados do Endereço (vêm da sugestão do geocoding) -----
-        @NotBlank(message = "O bairro é obrigatório")
-        @Size(max = 60, message = "O bairro deve ter no máximo 60 caracteres")
-        String bairro,
-
+        @NotBlank(message = "O nome do local é obrigatório")
+        @Size(max = 60, message = "O nome deve ter no máximo 60 caracteres")
+        String nome,
+        
         @NotBlank(message = "A cidade é obrigatória")
         @Size(max = 60, message = "A cidade deve ter no máximo 60 caracteres")
         String cidade,

@@ -1,10 +1,32 @@
 package br.com.GaroAvisa.service;
 
+import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
+import java.util.List;
+
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import br.com.GaroAvisa.dto.PrevisaoResponse;
+import br.com.GaroAvisa.dto.PrevisaoResponse.ClimaAtual;
+import br.com.GaroAvisa.dto.PrevisaoResponse.DiaResponse;
+import br.com.GaroAvisa.dto.PrevisaoResponse.HoraResponse;
+import br.com.GaroAvisa.dto.PrevisaoResponse.LocalResumo;
+import br.com.GaroAvisa.dto.PrevisaoResponse.Medida;
+import br.com.GaroAvisa.dto.PrevisaoResponse.Sol;
+import br.com.GaroAvisa.dto.PrevisaoResponse.Vento;
 import br.com.GaroAvisa.evento.PrevisaoAtualizadaEvento;
+import br.com.GaroAvisa.evento.PrevisaoAtualizadaEvento.Agora;
+import br.com.GaroAvisa.evento.PrevisaoAtualizadaEvento.Dia;
+import br.com.GaroAvisa.exception.RecursoNaoEncontradoException;
+import br.com.GaroAvisa.model.CondicaoWmo;
+import br.com.GaroAvisa.model.Endereco;
+import br.com.GaroAvisa.model.Local;
 import br.com.GaroAvisa.model.Previsao;
+import br.com.GaroAvisa.model.Uf;
+import br.com.GaroAvisa.repository.LocalRepository;
 import br.com.GaroAvisa.repository.PrevisaoRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -15,10 +37,17 @@ import tools.jackson.databind.ObjectMapper;
 @RequiredArgsConstructor
 public class PrevisaoService {
 
+    private static final int HORAS = 48;
+    private static final int DIAS_CONFIAVEIS = 7; // a partir do 8o dia a previsao e menos certeira
+
+    private static final String[] DIRECOES = { "N", "NE", "L", "SE", "S", "SO", "O", "NO" };
+
     private final PrevisaoRepository previsaoRepository;
+    private final LocalRepository localRepository;
     private final ObjectMapper objectMapper;
 
-    // Guarda a previsao do endereco, substituindo a anterior
+ // ---------- Consumidor do evento PrevisaoAtualizada ----------
+
     @Transactional
     public void salvar(PrevisaoAtualizadaEvento evento) {
         String json = paraJson(evento);
@@ -29,8 +58,7 @@ public class PrevisaoService {
             previsaoRepository.save(new Previsao(evento.enderecoId(), json, evento.atualizadoEm()));
             return;
         }
-        
-        // Mensagem repetida ou atrasada (reentrega): a previsao guardada ja e igual ou mais nova
+
         if (!previsao.getAtualizadoEm().isBefore(evento.atualizadoEm())) {
             log.info("Previsao do endereco {} ignorada: a guardada e igual ou mais nova", evento.enderecoId());
             return;
@@ -38,6 +66,136 @@ public class PrevisaoService {
 
         previsao.atualizar(json, evento.atualizadoEm());
     }
+    
+    
+    // ---------- GET /locais/{id}/previsao ----------
+
+    @Transactional(readOnly = true)
+    public PrevisaoResponse buscarDoLocal(Long usuarioId, Long localId) {
+        Local local = localRepository.findByIdAndUsuarioId(usuarioId, localId)
+                .orElseThrow(() -> new RecursoNaoEncontradoException("Local não encontrado"));
+
+        Endereco endereco = local.getEndereco();
+        LocalResumo resumo = new LocalResumo(
+                local.getId(),
+                local.getApelido(),
+                endereco.getNome(),
+                endereco.getCidade(),
+                endereco.getEstado(),
+                Uf.sigla(endereco.getEstado()),
+                endereco.getFuso());
+
+        Previsao previsao = previsaoRepository.findById(endereco.getId()).orElse(null);
+
+        // Local recem-criado: a previsao ainda esta sendo buscada
+        if (previsao == null) {
+            return new PrevisaoResponse(resumo, null, null, List.of(), List.of(), List.of(), List.of());
+        }
+
+        PrevisaoAtualizadaEvento dados = deJson(previsao.getDados());
+
+        return new PrevisaoResponse(
+                resumo,
+                previsao.getAtualizadoEm(),
+                montarClimaAtual(dados),
+                montarHoras(dados),
+                montarDias(dados),
+                List.of(),  // alertas: Epic 5
+                List.of()); // mudancas na previsao: feature 21
+    }
+    
+    
+    // ---------- Montagem da resposta ----------
+    private ClimaAtual montarClimaAtual(PrevisaoAtualizadaEvento dados) {
+        Agora agora = dados.agora();
+        if (agora == null) {
+            return null;
+        }
+        Dia hoje = dados.dias().isEmpty() ? null : dados.dias().get(0);
+
+        return new ClimaAtual(
+                agora.temperatura(),
+                CondicaoWmo.texto(agora.codigoWmo()),
+                agora.categoria(),
+                agora.ehDia(),
+                agora.sensacaoTermica(),
+                hoje == null ? null : hoje.maxima(),
+                hoje == null ? null : hoje.minima(),
+                agora.umidade(),
+                new Vento(agora.ventoVelocidade(), direcao(agora.ventoDirecao())),
+                new Medida(agora.rajada(), descricaoRajada(agora.rajada())),
+                new Medida(agora.uv(), descricaoUv(agora.uv())),
+                agora.chanceChuva(),
+                hoje == null ? null : new Sol(hoje.nascerDoSol(), hoje.porDoSol()));
+    }
+    
+ // As 48 horas a partir da hora atual, no fuso do local
+    private List<HoraResponse> montarHoras(PrevisaoAtualizadaEvento dados) {
+        LocalDateTime agora = LocalDateTime.now(ZoneId.of(dados.fuso())).truncatedTo(ChronoUnit.HOURS);
+
+        return dados.horas().stream()
+                .filter(h -> !h.horario().isBefore(agora))
+                .limit(HORAS)
+                .map(h -> new HoraResponse(h.horario(), h.temperatura(), h.chanceChuva(),
+                        h.categoria(), h.ehDia()))
+                .toList();
+    }
+    
+    
+    
+    private List<DiaResponse> montarDias(PrevisaoAtualizadaEvento dados) {
+        List<DiaResponse> resposta = new ArrayList<>();
+
+        for (int i = 0; i < dados.dias().size(); i++) {
+            Dia d = dados.dias().get(i);
+            resposta.add(new DiaResponse(
+                    d.data(),
+                    d.minima(),
+                    d.maxima(),
+                    d.categoria(),
+                    CondicaoWmo.texto(d.codigoWmo()),
+                    d.chanceChuvaMaxima(),
+                    d.chuvaMm(),
+                    i >= DIAS_CONFIAVEIS));
+        }
+        return resposta;
+    }
+    
+    
+    // ---------- Classificacoes e conversoes ----------
+
+    // 211 graus -> "SO"
+    private String direcao(Integer graus) {
+        if (graus == null) {
+            return null;
+        }
+        return DIRECOES[(int) Math.round(graus / 45.0) % 8];
+    }
+
+    // 0-2 Baixo · 3-5 Moderado · 6-7 Alto · 8-10 Muito alto · 11+ Extremo
+    private String descricaoUv(Double uv) {
+        if (uv == null) {
+            return null;
+        }
+        long valor = Math.round(uv);
+        if (valor <= 2) return "Baixo";
+        if (valor <= 5) return "Moderado";
+        if (valor <= 7) return "Alto";
+        if (valor <= 10) return "Muito alto";
+        return "Extremo";
+    }
+
+    // abaixo de 30 km/h Fracas · 30-49 Moderadas · 50+ Fortes
+    private String descricaoRajada(Double rajada) {
+        if (rajada == null) {
+            return null;
+        }
+        if (rajada < 30) return "Fracas";
+        if (rajada < 50) return "Moderadas";
+        return "Fortes";
+    }
+
+    // ---------- JSON ----------
 
     private String paraJson(PrevisaoAtualizadaEvento evento) {
         try {
@@ -45,6 +203,14 @@ public class PrevisaoService {
         } catch (Exception e) {
             throw new IllegalStateException(
                     "Falha ao converter a previsao do endereco " + evento.enderecoId(), e);
+        }
+    }
+
+    private PrevisaoAtualizadaEvento deJson(String json) {
+        try {
+            return objectMapper.readValue(json, PrevisaoAtualizadaEvento.class);
+        } catch (Exception e) {
+            throw new IllegalStateException("Falha ao ler a previsao guardada", e);
         }
     }
 }

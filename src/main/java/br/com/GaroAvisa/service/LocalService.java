@@ -203,7 +203,7 @@ public class LocalService {
 		        	        requisicao.pais().trim(),
 		        	        requisicao.estado().trim(),
 		        	        requisicao.cidade().trim(),
-		        	        requisicao.bairro().trim(),
+		        	        requisicao.nome().trim(),
 		        	        latitude,
 		        	        longitude,
 		        	        fuso));

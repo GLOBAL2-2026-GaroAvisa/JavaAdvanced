@@ -27,8 +27,8 @@ public class Endereco {
     @Column(name = "cidade", nullable = false, length = 60)
     private String cidade;
 
-    @Column(name = "bairro", nullable = false, length = 60)
-    private String bairro;
+    @Column(name = "nome", nullable = false, length = 60)
+    private String nome;
 
     @Column(name = "latitude", nullable = false, precision = 9, scale = 6)
     private BigDecimal latitude;
@@ -44,7 +44,7 @@ public class Endereco {
         this.pais = pais;
         this.estado = estado;
         this.cidade = cidade;
-        this.bairro = bairro;
+        this.nome = bairro;
         this.latitude = latitude;
         this.longitude = longitude;
         this.fuso = fuso;

@@ -5,7 +5,7 @@ import br.com.GaroAvisa.model.Local;
 public record LocalCardResponse(
         Long id,
         String apelido,
-        String bairro,
+        String nome,
         String cidade,
         boolean principal,
         boolean receberAlertas) {
@@ -14,7 +14,7 @@ public record LocalCardResponse(
         return new LocalCardResponse(
                 local.getId(),
                 local.getApelido(),
-                local.getEndereco().getBairro(),
+                local.getEndereco().getNome(),
                 local.getEndereco().getCidade(),
                 local.getPrincipal(),
                 local.getReceberAlertas());

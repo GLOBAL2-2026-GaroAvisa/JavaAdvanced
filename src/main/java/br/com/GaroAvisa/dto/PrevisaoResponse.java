@@ -20,9 +20,10 @@ public record PrevisaoResponse(
     public record LocalResumo(
             Long id,
             String apelido,
-            String bairro,
+            String nome,
             String cidade,
             String estado,
+            String uf,
             String fuso) {
     }
 
