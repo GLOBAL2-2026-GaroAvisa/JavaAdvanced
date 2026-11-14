@@ -7,6 +7,7 @@ import java.time.ZoneId;
 import java.util.List;
 import java.util.Optional;
 
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -18,9 +19,11 @@ import br.com.GaroAvisa.dto.CriarLocalRequest;
 import br.com.GaroAvisa.dto.EditarLocalRequest;
 import br.com.GaroAvisa.dto.LocalCardResponse;
 import br.com.GaroAvisa.dto.PaginaResponse;
+import br.com.GaroAvisa.evento.EnderecoParaPrevisao;
 import br.com.GaroAvisa.exception.ApelidoJaCadastradoException;
 import br.com.GaroAvisa.exception.FusoInvalidoException;
 import br.com.GaroAvisa.exception.RecursoNaoEncontradoException;
+import br.com.GaroAvisa.mensageria.EnderecoNovoCriado;
 import br.com.GaroAvisa.model.Endereco;
 import br.com.GaroAvisa.model.Local;
 import br.com.GaroAvisa.model.Usuario;
@@ -40,6 +43,7 @@ public class LocalService {
 	private final LocalRepository localRepository;
 	private final EnderecoRepository enderecoRepository;
 	private final UsuarioRepository usuarioRepository;
+	private final ApplicationEventPublisher eventPublisher;
 
 	@Transactional(readOnly = true)
 	public PaginaResponse<LocalCardResponse> listar(Long usuarioId, String busca, Integer pagina, Integer tamanho) {
@@ -193,8 +197,18 @@ public class LocalService {
 		BigDecimal latitude = requisicao.latitude().setScale(CASAS_COORDENADA, RoundingMode.HALF_UP);
 		BigDecimal longitude = requisicao.longitude().setScale(CASAS_COORDENADA, RoundingMode.HALF_UP);
 
-		return enderecoRepository.findByLatitudeAndLongitude(latitude, longitude).orElseGet(
-				() -> enderecoRepository.save(new Endereco(requisicao.pais().trim(), requisicao.estado().trim(),
-						requisicao.cidade().trim(), requisicao.bairro().trim(), latitude, longitude, fuso)));
+		return enderecoRepository.findByLatitudeAndLongitude(latitude, longitude)
+		        .orElseGet(() -> {
+		        	Endereco novo = enderecoRepository.saveAndFlush(new Endereco(
+		        	        requisicao.pais().trim(),
+		        	        requisicao.estado().trim(),
+		        	        requisicao.cidade().trim(),
+		        	        requisicao.bairro().trim(),
+		        	        latitude,
+		        	        longitude,
+		        	        fuso));
+		            eventPublisher.publishEvent(new EnderecoNovoCriado(EnderecoParaPrevisao.de(novo)));
+		            return novo;
+		        });
 	}
 }
