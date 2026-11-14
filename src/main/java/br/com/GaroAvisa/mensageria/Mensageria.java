@@ -7,6 +7,10 @@ public final class Mensageria {
     // E1: pedidos de previsão (API -> Clima)
     public static final String RK_PREVISAO_SOLICITADA_LOCAL_CRIADO = "previsao.solicitada.local-criado";
     public static final String RK_PREVISAO_SOLICITADA_AGENDADA = "previsao.solicitada.agendada";
+    
+    // E2: filas desta API
+    public static final String FILA_PREVISAO_ATUALIZADA = "api.previsao-atualizada";
+    public static final String FILA_PREVISAO_ATUALIZADA_DLQ = "api.previsao-atualizada.dlq";
 
     // E2: previsões prontas (Clima -> API), usada no próximo evento
     public static final String RK_PREVISAO_ATUALIZADA = "previsao.atualizada";

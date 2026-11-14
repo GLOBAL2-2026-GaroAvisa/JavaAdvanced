@@ -1,5 +1,9 @@
 package br.com.GaroAvisa.config;
 
+import org.springframework.amqp.core.Binding;
+import org.springframework.amqp.core.BindingBuilder;
+import org.springframework.amqp.core.Queue;
+import org.springframework.amqp.core.QueueBuilder;
 import org.springframework.amqp.core.TopicExchange;
 import org.springframework.amqp.support.converter.JacksonJsonMessageConverter;
 import org.springframework.amqp.support.converter.MessageConverter;
@@ -25,5 +29,26 @@ public class RabbitConfig {
         JacksonJsonMessageConverter conversor = new JacksonJsonMessageConverter();
         conversor.setAlwaysConvertToInferredType(true);
         return conversor;
+    }
+    
+    // Fila desta API para as previsoes prontas; mensagens com erro vao para a DLQ
+    @Bean
+    Queue filaPrevisaoAtualizada() {
+        return QueueBuilder.durable(Mensageria.FILA_PREVISAO_ATUALIZADA)
+                .deadLetterExchange("")
+                .deadLetterRoutingKey(Mensageria.FILA_PREVISAO_ATUALIZADA_DLQ)
+                .build();
+    }
+
+    @Bean
+    Queue filaPrevisaoAtualizadaDlq() {
+        return QueueBuilder.durable(Mensageria.FILA_PREVISAO_ATUALIZADA_DLQ).build();
+    }
+
+    @Bean
+    Binding bindingPrevisaoAtualizada(Queue filaPrevisaoAtualizada, TopicExchange garoavisaEventos) {
+        return BindingBuilder.bind(filaPrevisaoAtualizada)
+                .to(garoavisaEventos)
+                .with(Mensageria.RK_PREVISAO_ATUALIZADA);
     }
 }
