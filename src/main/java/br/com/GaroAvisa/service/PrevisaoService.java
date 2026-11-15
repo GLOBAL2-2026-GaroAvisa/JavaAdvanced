@@ -1,5 +1,6 @@
 package br.com.GaroAvisa.service;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
@@ -10,7 +11,9 @@ import java.util.List;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import br.com.GaroAvisa.cliente.ClimaClient;
 import br.com.GaroAvisa.dto.MudancaResponse;
+import br.com.GaroAvisa.dto.PesquisaResponse;
 import br.com.GaroAvisa.dto.PrevisaoResponse;
 import br.com.GaroAvisa.dto.PrevisaoResponse.ClimaAtual;
 import br.com.GaroAvisa.dto.PrevisaoResponse.DiaResponse;
@@ -22,6 +25,8 @@ import br.com.GaroAvisa.dto.PrevisaoResponse.Vento;
 import br.com.GaroAvisa.evento.PrevisaoAtualizadaEvento;
 import br.com.GaroAvisa.evento.PrevisaoAtualizadaEvento.Agora;
 import br.com.GaroAvisa.evento.PrevisaoAtualizadaEvento.Dia;
+import br.com.GaroAvisa.exception.CoordenadaInvalidaException;
+import br.com.GaroAvisa.exception.FusoInvalidoException;
 import br.com.GaroAvisa.exception.RecursoNaoEncontradoException;
 import br.com.GaroAvisa.model.CondicaoWmo;
 import br.com.GaroAvisa.model.Endereco;
@@ -44,12 +49,19 @@ public class PrevisaoService {
     private static final int DIAS_CONFIAVEIS = 7; // a partir do 8o dia a previsao e menos certeira
 
     private static final String[] DIRECOES = { "N", "NE", "L", "SE", "S", "SO", "O", "NO" };
+    
+    private static final int HORAS_PESQUISA = 24;
+    private static final BigDecimal LATITUDE_MINIMA = new BigDecimal("-90");
+    private static final BigDecimal LATITUDE_MAXIMA = new BigDecimal("90");
+    private static final BigDecimal LONGITUDE_MINIMA = new BigDecimal("-180");
+    private static final BigDecimal LONGITUDE_MAXIMA = new BigDecimal("180");
 
     private final PrevisaoRepository previsaoRepository;
     private final LocalRepository localRepository;
     private final ObjectMapper objectMapper;
     private final DetectorMudancaService detector;
     private final MudancaPrevisaoRepository mudancaRepository;
+    private final ClimaClient climaClient;
 
  // ---------- Consumidor do evento PrevisaoAtualizada ----------
 
@@ -116,6 +128,44 @@ public class PrevisaoService {
                 montarDias(dados),
                 List.of(),  // alertas: Epic 5
                 mudancas); // mudancas na previsao: feature 21
+    }
+    
+    
+    // SEM @Transactional de proposito: a chamada ao Servico de Clima pode levar
+    // dezenas de segundos (o Render pode estar acordando) e nao queremos segurar
+    // uma conexao do Oracle parada esse tempo todo.
+    public PesquisaResponse buscarDeCoordenadas(BigDecimal latitude, BigDecimal longitude, String fuso) {
+        validarCoordenadas(latitude, longitude);
+        String fusoValidado = validarFuso(fuso);
+
+        PrevisaoAtualizadaEvento dados = climaClient.buscar(latitude, longitude, fusoValidado);
+
+        return new PesquisaResponse(
+                dados.atualizadoEm(),
+                montarClimaAtual(dados),
+                montarHoras(dados).stream().limit(HORAS_PESQUISA).toList(),
+                montarDias(dados),
+                null,
+                List.of());
+    }
+
+    private void validarCoordenadas(BigDecimal latitude, BigDecimal longitude) {
+        boolean latitudeFora = latitude.compareTo(LATITUDE_MINIMA) < 0
+                || latitude.compareTo(LATITUDE_MAXIMA) > 0;
+        boolean longitudeFora = longitude.compareTo(LONGITUDE_MINIMA) < 0
+                || longitude.compareTo(LONGITUDE_MAXIMA) > 0;
+
+        if (latitudeFora || longitudeFora) {
+            throw new CoordenadaInvalidaException();
+        }
+    }
+
+    private String validarFuso(String fuso) {
+        try {
+            return ZoneId.of(fuso).getId();
+        } catch (Exception e) {
+            throw new FusoInvalidoException(fuso);
+        }
     }
     	
     

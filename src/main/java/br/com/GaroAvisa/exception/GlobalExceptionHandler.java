@@ -73,4 +73,18 @@ public class GlobalExceptionHandler {
         problema.setTitle("Senha inválida");
         return problema;
     }
+    
+    @ExceptionHandler(CoordenadaInvalidaException.class)
+    public ProblemDetail coordenadaInvalida(CoordenadaInvalidaException e) {
+        ProblemDetail problema = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, e.getMessage());
+        problema.setTitle("Coordenada inválida");
+        return problema;
+    }
+
+    @ExceptionHandler(ServicoIndisponivelException.class)
+    public ProblemDetail servicoIndisponivel(ServicoIndisponivelException e) {
+        ProblemDetail problema = ProblemDetail.forStatusAndDetail(HttpStatus.SERVICE_UNAVAILABLE, e.getMessage());
+        problema.setTitle("Serviço indisponível");
+        return problema;
+    }
 }

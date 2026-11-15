@@ -1,13 +1,17 @@
 package br.com.GaroAvisa.controller;
 
+import java.math.BigDecimal;
+
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import br.com.GaroAvisa.dto.PesquisaResponse;
 import br.com.GaroAvisa.dto.PrevisaoResponse;
 import br.com.GaroAvisa.service.PrevisaoService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -44,6 +48,29 @@ public class PrevisaoController {
     public ResponseEntity<PrevisaoResponse> buscar(@Parameter(hidden = true) @AuthenticationPrincipal Jwt jwt,
                                                    @PathVariable Long LocalId) {
         return ResponseEntity.ok(previsaoService.buscarDoLocal(usuarioId(jwt), LocalId));
+    }
+    
+    @Operation(summary = "Previsão de um lugar pesquisado",
+            description = "Busca a previsão direto no Serviço de Clima, por coordenada, sem salvar nada no banco. "
+                    + "Usada pela tela de Pesquisa, quando o lugar ainda não é um Local do usuário.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Previsão encontrada"),
+            @ApiResponse(responseCode = "400", description = "Coordenada ou fuso inválido", content = @Content),
+            @ApiResponse(responseCode = "401", description = "Token ausente ou inválido", content = @Content),
+            @ApiResponse(responseCode = "503", description = "Serviço de Clima indisponível", content = @Content)
+    })
+    @GetMapping("/previsao")
+    public ResponseEntity<PesquisaResponse> pesquisar(
+            @Parameter(description = "Latitude do lugar", example = "-22.9842")
+            @RequestParam BigDecimal latitude,
+
+            @Parameter(description = "Longitude do lugar", example = "-43.1986")
+            @RequestParam BigDecimal longitude,
+
+            @Parameter(description = "Fuso horário IANA do lugar", example = "America/Sao_Paulo")
+            @RequestParam String fuso) {
+
+        return ResponseEntity.ok(previsaoService.buscarDeCoordenadas(latitude, longitude, fuso));
     }
 
     private Long usuarioId(Jwt jwt) {
