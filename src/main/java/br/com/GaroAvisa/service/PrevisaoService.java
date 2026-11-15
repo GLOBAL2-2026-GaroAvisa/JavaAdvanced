@@ -1,5 +1,6 @@
 package br.com.GaroAvisa.service;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
@@ -9,6 +10,7 @@ import java.util.List;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import br.com.GaroAvisa.dto.MudancaResponse;
 import br.com.GaroAvisa.dto.PrevisaoResponse;
 import br.com.GaroAvisa.dto.PrevisaoResponse.ClimaAtual;
 import br.com.GaroAvisa.dto.PrevisaoResponse.DiaResponse;
@@ -27,6 +29,7 @@ import br.com.GaroAvisa.model.Local;
 import br.com.GaroAvisa.model.Previsao;
 import br.com.GaroAvisa.model.Uf;
 import br.com.GaroAvisa.repository.LocalRepository;
+import br.com.GaroAvisa.repository.MudancaPrevisaoRepository;
 import br.com.GaroAvisa.repository.PrevisaoRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -45,6 +48,8 @@ public class PrevisaoService {
     private final PrevisaoRepository previsaoRepository;
     private final LocalRepository localRepository;
     private final ObjectMapper objectMapper;
+    private final DetectorMudancaService detector;
+    private final MudancaPrevisaoRepository mudancaRepository;
 
  // ---------- Consumidor do evento PrevisaoAtualizada ----------
 
@@ -63,6 +68,9 @@ public class PrevisaoService {
             log.info("Previsao do endereco {} ignorada: a guardada e igual ou mais nova", evento.enderecoId());
             return;
         }
+        
+        // Feature 21: compara ANTES de substituir, enquanto as duas versoes existem
+        detector.detectar(deJson(previsao.getDados()), evento);
 
         previsao.atualizar(json, evento.atualizadoEm());
     }
@@ -93,6 +101,12 @@ public class PrevisaoService {
         }
 
         PrevisaoAtualizadaEvento dados = deJson(previsao.getDados());
+        
+        List<MudancaResponse> mudancas = mudancaRepository
+                .buscarDoLocal(localId, LocalDate.now(ZoneId.of(endereco.getFuso())))
+                .stream()
+                .map(MudancaResponse::de)
+                .toList();
 
         return new PrevisaoResponse(
                 resumo,
@@ -101,9 +115,9 @@ public class PrevisaoService {
                 montarHoras(dados),
                 montarDias(dados),
                 List.of(),  // alertas: Epic 5
-                List.of()); // mudancas na previsao: feature 21
+                mudancas); // mudancas na previsao: feature 21
     }
-    
+    	
     
     // ---------- Montagem da resposta ----------
     private ClimaAtual montarClimaAtual(PrevisaoAtualizadaEvento dados) {

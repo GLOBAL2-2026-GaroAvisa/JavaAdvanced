@@ -15,7 +15,7 @@ public record PrevisaoResponse(
         List<HoraResponse> previsaoPorHora,
         List<DiaResponse> previsaoDiaria,
         List<Object> alertas,
-        List<Object> mudancasNaPrevisao) {
+        List<MudancaResponse> mudancasNaPrevisao) {
 
     public record LocalResumo(
             Long id,

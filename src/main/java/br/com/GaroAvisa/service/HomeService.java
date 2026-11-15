@@ -1,5 +1,7 @@
 package br.com.GaroAvisa.service;
 
+import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.List;
 
 import org.springframework.stereotype.Service;
@@ -7,9 +9,11 @@ import org.springframework.transaction.annotation.Transactional;
 
 import br.com.GaroAvisa.dto.CompromissoResponse;
 import br.com.GaroAvisa.dto.HomeResponse;
+import br.com.GaroAvisa.dto.MudancaResponse;
 import br.com.GaroAvisa.dto.PrevisaoResponse;
 import br.com.GaroAvisa.model.Local;
 import br.com.GaroAvisa.repository.LocalRepository;
+import br.com.GaroAvisa.repository.MudancaPrevisaoRepository;
 import lombok.RequiredArgsConstructor;
 
 @Service
@@ -18,10 +22,12 @@ public class HomeService {
 
     private static final int HORAS_HOME = 24;
     private static final int COMPROMISSOS_HOME = 2;
+    private static final ZoneId FUSO_PADRAO = ZoneId.of("America/Sao_Paulo");
 
     private final LocalRepository localRepository;
     private final PrevisaoService previsaoService;
     private final CompromissoService compromissoService;
+    private final MudancaPrevisaoRepository mudancaRepository;
 
     @Transactional(readOnly = true)
     public HomeResponse buscar(Long usuarioId) {
@@ -32,12 +38,27 @@ public class HomeService {
         List<CompromissoResponse> compromissos =
                 compromissoService.listarProximos(usuarioId, 0, COMPROMISSOS_HOME).itens();
 
+        List<MudancaResponse> mudancas = mudancaRepository
+                .buscarDoUsuario(usuarioId, LocalDate.now(FUSO_PADRAO))
+                .stream()
+                .map(MudancaResponse::de)
+                .toList();
+
         Local principal = localRepository.findByUsuarioIdAndPrincipal(usuarioId, true).orElse(null);
 
         // Sem local principal: o app mostra o convite, de acordo com temLocais
         if (principal == null) {
-            return new HomeResponse(temLocais, null, null, null, List.of(), null,
-                    List.of(), List.of(), List.of(), compromissos);
+            return new HomeResponse(
+                    temLocais,
+                    null,       // local
+                    null,       // atualizadoEm
+                    null,       // climaAtual
+                    List.of(),  // previsaoPorHora
+                    null,       // explicacaoDoDia: feature 23
+                    List.of(),  // alertas: feature 18
+                    List.of(),  // dicas: feature 20
+                    mudancas,   // feature 21
+                    compromissos);
         }
 
         PrevisaoResponse previsao = previsaoService.buscarDoLocal(usuarioId, principal.getId());
@@ -51,7 +72,7 @@ public class HomeService {
                 null,       // explicacaoDoDia: feature 23
                 List.of(),  // alertas: feature 18
                 List.of(),  // dicas: feature 20
-                List.of(),  // mudancas na previsao: feature 21
+                mudancas,   // feature 21
                 compromissos);
     }
 }

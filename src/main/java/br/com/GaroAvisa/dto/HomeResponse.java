@@ -13,6 +13,6 @@ public record HomeResponse(
         String explicacaoDoDia,
         List<Object> alertas,
         List<Object> dicas,
-        List<Object> mudancasNaPrevisao,
+        List<MudancaResponse> mudancasNaPrevisao,
         List<CompromissoResponse> compromissos) {
 }

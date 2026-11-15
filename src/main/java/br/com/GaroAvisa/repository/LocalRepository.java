@@ -55,5 +55,9 @@ public interface LocalRepository extends JpaRepository<Local, Long> {
 
     // PUT /locais/{id}: encontra o principal atual para desmarcar
     Optional<Local> findByUsuarioIdAndPrincipal(Long usuarioId, Boolean principal);
+    
+    // Todos os locais (de qualquer usuario) que usam este endereco
+    @Query("SELECT l FROM Local l WHERE l.endereco.id = :enderecoId")
+    List<Local> listarPorEndereco(@Param("enderecoId") Long enderecoId);
 
 }
