@@ -19,14 +19,17 @@ public class PrevisaoSolicitadaPublisher {
     private static final int TAMANHO_LOTE = 50;
 
     private final RabbitTemplate rabbitTemplate;
+    private final DespertadorClima despertador;
 
-    // Gatilho 1: um Local foi criado num endereço novo
+    // Gatilho 1: um Local foi criado num endereco novo
     public void localCriado(EnderecoParaPrevisao endereco) {
+        despertador.acordar();
         publicar(Mensageria.RK_PREVISAO_SOLICITADA_LOCAL_CRIADO, List.of(endereco));
     }
 
-    // Gatilho 2: atualização de hora em hora, em lotes
+    // Gatilho 2: atualizacao de hora em hora, em lotes
     public void agendado(List<EnderecoParaPrevisao> enderecos) {
+        despertador.acordar();
         for (int inicio = 0; inicio < enderecos.size(); inicio += TAMANHO_LOTE) {
             int fim = Math.min(inicio + TAMANHO_LOTE, enderecos.size());
             publicar(Mensageria.RK_PREVISAO_SOLICITADA_AGENDADA, enderecos.subList(inicio, fim));
