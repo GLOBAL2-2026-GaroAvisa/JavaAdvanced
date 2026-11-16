@@ -3,6 +3,8 @@ package br.com.GaroAvisa.service;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -32,17 +34,14 @@ public class HomeService {
     @Transactional(readOnly = true)
     public HomeResponse buscar(Long usuarioId) {
 
-        boolean temLocais = localRepository.countByUsuarioId(usuarioId) > 0;
+        List<Local> locais = localRepository.listarPorUsuario(usuarioId);
+        boolean temLocais = !locais.isEmpty();
 
         // Nao dependem do local principal
         List<CompromissoResponse> compromissos =
                 compromissoService.listarProximos(usuarioId, 0, COMPROMISSOS_HOME).itens();
 
-        List<MudancaResponse> mudancas = mudancaRepository
-                .buscarDoUsuario(usuarioId, LocalDate.now(FUSO_PADRAO))
-                .stream()
-                .map(MudancaResponse::de)
-                .toList();
+        List<MudancaResponse> mudancas = montarMudancas(locais);
 
         Local principal = localRepository.findByUsuarioIdAndPrincipal(usuarioId, true).orElse(null);
 
@@ -74,5 +73,26 @@ public class HomeService {
                 List.of(),  // dicas: feature 20
                 mudancas,   // feature 21
                 compromissos);
+    }
+
+    // As mudancas sao guardadas por endereco. A Home traz as de todos os locais
+    // do usuario, e cada card mostra o apelido do Local, nao o endereco.
+    private List<MudancaResponse> montarMudancas(List<Local> locais) {
+        if (locais.isEmpty()) {
+            return List.of();
+        }
+
+        // Um mesmo endereco pode ser usado por mais de um local do usuario
+        // (apelidos diferentes na mesma coordenada): nesse caso a mudanca
+        // aparece uma vez por local, que e o que a pessoa espera ver.
+        Map<Long, List<Local>> locaisPorEndereco = locais.stream()
+                .collect(Collectors.groupingBy(l -> l.getEndereco().getId()));
+
+        return mudancaRepository
+                .buscarDosEnderecos(locaisPorEndereco.keySet(), LocalDate.now(FUSO_PADRAO))
+                .stream()
+                .flatMap(m -> locaisPorEndereco.get(m.getEndereco().getId()).stream()
+                        .map(local -> MudancaResponse.de(m, local)))
+                .toList();
     }
 }

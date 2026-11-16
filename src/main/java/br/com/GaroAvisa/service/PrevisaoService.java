@@ -114,10 +114,12 @@ public class PrevisaoService {
 
         PrevisaoAtualizadaEvento dados = deJson(previsao.getDados());
         
+        // As mudancas sao do ENDERECO; o Local entra so para o card mostrar o apelido
         List<MudancaResponse> mudancas = mudancaRepository
-                .buscarDoLocal(localId, LocalDate.now(ZoneId.of(endereco.getFuso())))
+                .buscarDosEnderecos(List.of(endereco.getId()),
+                                    LocalDate.now(ZoneId.of(endereco.getFuso())))
                 .stream()
-                .map(MudancaResponse::de)
+                .map(m -> MudancaResponse.de(m, local))
                 .toList();
 
         return new PrevisaoResponse(

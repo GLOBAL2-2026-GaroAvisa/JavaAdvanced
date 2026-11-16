@@ -18,7 +18,9 @@ import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
-// Uma mudanca brusca na previsao de UM dia, em UM local
+// Uma mudanca brusca na previsao de UM dia, em UM endereco.
+// Vale para todos os locais que usam esse endereco: a comparacao e feita
+// uma vez so, e quem amarra a mudanca ao Local e quem monta a tela.
 @Entity
 @Table(name = "T_GA_MUDANCA_PREVISAO")
 @Getter
@@ -31,8 +33,8 @@ public class MudancaPrevisao {
     private Long id;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "fk_id_local", nullable = false, updatable = false)
-    private Local local;
+    @JoinColumn(name = "fk_id_endereco", nullable = false, updatable = false)
+    private Endereco endereco;
 
     // O dia da previsao que mudou
     @Column(name = "dt_dia", nullable = false, updatable = false)
@@ -55,11 +57,11 @@ public class MudancaPrevisao {
     @Column(name = "dt_registro", nullable = false)
     private Instant registradoEm;
 
-    public MudancaPrevisao(Local local, LocalDate dia,
+    public MudancaPrevisao(Endereco endereco, LocalDate dia,
                            String anterior, CategoriaClima categoriaAnterior,
                            String atualizada, CategoriaClima categoriaAtual,
                            Instant registradoEm) {
-        this.local = local;
+        this.endereco = endereco;
         this.dia = dia;
         this.anterior = anterior;
         this.categoriaAnterior = categoriaAnterior;
