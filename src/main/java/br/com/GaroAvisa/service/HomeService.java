@@ -11,6 +11,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import br.com.GaroAvisa.dto.AlertaResponse;
 import br.com.GaroAvisa.dto.CompromissoResponse;
+import br.com.GaroAvisa.dto.DicaResponse;
 import br.com.GaroAvisa.dto.HomeResponse;
 import br.com.GaroAvisa.dto.MudancaResponse;
 import br.com.GaroAvisa.dto.PrevisaoResponse;
@@ -31,6 +32,7 @@ public class HomeService {
     private final PrevisaoService previsaoService;
     private final CompromissoService compromissoService;
     private final MudancaPrevisaoRepository mudancaRepository;
+    private final DicaService dicaService;
 
     @Transactional(readOnly = true)
     public HomeResponse buscar(Long usuarioId) {
@@ -56,12 +58,14 @@ public class HomeService {
                     List.of(),  // previsaoPorHora
                     null,       // explicacaoDoDia: feature 23
                     List.of(),  // alertas
-                    List.of(),  // dicas: feature 20
+                    List.of(),  // dicas
                     mudancas,   // feature 21
                     compromissos);
         }
 
-        PrevisaoResponse previsao = previsaoService.buscarDoLocal(usuarioId, principal.getId());
+        PrevisaoService.PrevisaoDoLocal doLocal =
+                previsaoService.buscarDoLocalComDados(usuarioId, principal.getId());
+        PrevisaoResponse previsao = doLocal.resposta();
 
         return new HomeResponse(
                 temLocais,
@@ -69,16 +73,15 @@ public class HomeService {
                 previsao.atualizadoEm(),
                 previsao.climaAtual(),
                 previsao.previsaoPorHora().stream().limit(HORAS_HOME).toList(),
-                null,                       // explicacaoDoDia: feature 23
-                alertasDeHoje(previsao),    // feature 18
-                List.of(),                  // dicas: feature 20
-                mudancas,                   // feature 21
+                null,                     // explicacaoDoDia: feature 23
+                alertasDeHoje(previsao),  // feature 18
+                dicasDeHoje(doLocal),     // feature 20
+                mudancas,                 // feature 21
                 compromissos);
     }
 
     // Feature 18: a Home mostra so os alertas de HOJE do local principal.
-    // Os Detalhes ja trouxeram hoje e os proximos dias, entao aqui e so filtrar:
-    // uma ida a menos ao banco
+    // Os Detalhes ja trouxeram hoje e os proximos dias, entao aqui e so filtrar
     private List<AlertaResponse> alertasDeHoje(PrevisaoResponse previsao) {
         if (previsao.local() == null || previsao.local().fuso() == null) {
             return List.of();
@@ -87,6 +90,17 @@ public class HomeService {
         return previsao.alertas().stream()
                 .filter(alerta -> alerta.dia().equals(hoje))
                 .toList();
+    }
+
+    // Feature 20: dicas de hoje, do local principal.
+    // Calculadas na leitura sobre os dados crus que o buscarDoLocalComDados
+    // ja trouxe: nao ha segunda leitura do banco
+    private List<DicaResponse> dicasDeHoje(PrevisaoService.PrevisaoDoLocal doLocal) {
+        if (doLocal.dados() == null || doLocal.resposta().local() == null) {
+            return List.of();
+        }
+        LocalDate hoje = LocalDate.now(ZoneId.of(doLocal.resposta().local().fuso()));
+        return dicaService.calcular(doLocal.dados(), hoje);
     }
 
     // As mudancas sao guardadas por endereco. A Home traz as de todos os locais

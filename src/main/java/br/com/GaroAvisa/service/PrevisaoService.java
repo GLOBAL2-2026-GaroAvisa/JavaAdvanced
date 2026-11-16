@@ -7,7 +7,7 @@ import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Set;
+import java.util.Map;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -30,6 +30,7 @@ import br.com.GaroAvisa.evento.PrevisaoAtualizadaEvento.Dia;
 import br.com.GaroAvisa.exception.CoordenadaInvalidaException;
 import br.com.GaroAvisa.exception.FusoInvalidoException;
 import br.com.GaroAvisa.exception.RecursoNaoEncontradoException;
+import br.com.GaroAvisa.model.AlertaClima;
 import br.com.GaroAvisa.model.CondicaoWmo;
 import br.com.GaroAvisa.model.Endereco;
 import br.com.GaroAvisa.model.Local;
@@ -66,6 +67,11 @@ public class PrevisaoService {
     private final ClimaClient climaClient;
     private final AlertaClimaService alertaService;
     
+    
+    // A Home precisa dos dados crus para calcular as dicas (feature 20).
+    // Devolver os dois juntos evita ler o CLOB de 54 KB uma segunda vez
+    public record PrevisaoDoLocal(PrevisaoResponse resposta, PrevisaoAtualizadaEvento dados) {
+    }
 
  // ---------- Consumidor do evento PrevisaoAtualizada ----------
 
@@ -88,10 +94,10 @@ public class PrevisaoService {
         }
 
         // Feature 80 ANTES da 21: o detector precisa saber quais alertas nasceram agora
-        Set<LocalDate> diasComAlertaNovo = alertaService.gerar(evento);
+        Map<LocalDate, AlertaClima> alertasNovos = alertaService.gerar(evento);
 
         // Feature 21: compara ANTES de substituir, enquanto as duas versoes existem
-        detector.detectar(deJson(previsao.getDados()), evento, diasComAlertaNovo);
+        detector.detectar(deJson(previsao.getDados()), evento, alertasNovos);
 
         previsao.atualizar(json, evento.atualizadoEm());
     }
@@ -101,6 +107,11 @@ public class PrevisaoService {
 
     @Transactional(readOnly = true)
     public PrevisaoResponse buscarDoLocal(Long usuarioId, Long localId) {
+        return buscarDoLocalComDados(usuarioId, localId).resposta();
+    }
+
+    @Transactional(readOnly = true)
+    public PrevisaoDoLocal buscarDoLocalComDados(Long usuarioId, Long localId) {
         Local local = localRepository.findByIdAndUsuarioId(usuarioId, localId)
                 .orElseThrow(() -> new RecursoNaoEncontradoException("Local não encontrado"));
 
@@ -118,11 +129,13 @@ public class PrevisaoService {
 
         // Local recem-criado: a previsao ainda esta sendo buscada
         if (previsao == null) {
-            return new PrevisaoResponse(resumo, null, null, List.of(), List.of(), List.of(), List.of());
+            return new PrevisaoDoLocal(
+                    new PrevisaoResponse(resumo, null, null,
+                            List.of(), List.of(), List.of(), List.of()),
+                    null);
         }
 
         PrevisaoAtualizadaEvento dados = deJson(previsao.getDados());
-        
         LocalDate hoje = LocalDate.now(ZoneId.of(endereco.getFuso()));
 
         // As mudancas sao do ENDERECO; o Local entra so para o card mostrar o apelido
@@ -135,7 +148,7 @@ public class PrevisaoService {
         // Feature 15: alertas de hoje E dos proximos dias
         List<AlertaResponse> alertas = alertaService.buscarDoEndereco(endereco.getId(), hoje);
 
-        return new PrevisaoResponse(
+        PrevisaoResponse resposta = new PrevisaoResponse(
                 resumo,
                 previsao.getAtualizadoEm(),
                 montarClimaAtual(dados),
@@ -143,6 +156,8 @@ public class PrevisaoService {
                 montarDias(dados),
                 alertas,
                 mudancas);
+
+        return new PrevisaoDoLocal(resposta, dados);
     }
     
     

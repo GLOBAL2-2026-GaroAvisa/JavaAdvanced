@@ -12,7 +12,7 @@ public record HomeResponse(
         List<PrevisaoResponse.HoraResponse> previsaoPorHora,
         String explicacaoDoDia,
         List<AlertaResponse> alertas,
-        List<Object> dicas,
+        List<DicaResponse> dicas,
         List<MudancaResponse> mudancasNaPrevisao,
         List<CompromissoResponse> compromissos) {
 }

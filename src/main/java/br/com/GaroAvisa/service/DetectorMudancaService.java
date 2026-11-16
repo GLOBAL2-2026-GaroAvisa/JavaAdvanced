@@ -4,14 +4,16 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Set;
+import java.util.Optional;
 
 import org.springframework.stereotype.Service;
 
 import br.com.GaroAvisa.evento.PrevisaoAtualizadaEvento;
 import br.com.GaroAvisa.evento.PrevisaoAtualizadaEvento.Dia;
+import br.com.GaroAvisa.model.AlertaClima;
 import br.com.GaroAvisa.model.CategoriaClima;
 import br.com.GaroAvisa.model.Endereco;
+import br.com.GaroAvisa.model.MotivoMudanca;
 import br.com.GaroAvisa.model.MudancaPrevisao;
 import br.com.GaroAvisa.repository.EnderecoRepository;
 import br.com.GaroAvisa.repository.MudancaPrevisaoRepository;
@@ -34,7 +36,8 @@ public class DetectorMudancaService {
     private final EnderecoRepository enderecoRepository;
     private final MudancaPrevisaoRepository mudancaRepository;
 
-    public void detectar(PrevisaoAtualizadaEvento anterior, PrevisaoAtualizadaEvento nova, Set<LocalDate> diasComAlertaNovo) {
+    public void detectar(PrevisaoAtualizadaEvento anterior, PrevisaoAtualizadaEvento nova,
+                         Map<LocalDate, AlertaClima> alertasNovos) {
 
         Map<LocalDate, Dia> diasAnteriores = porData(anterior);
         int limite = Math.min(DIAS, nova.dias().size());
@@ -43,8 +46,13 @@ public class DetectorMudancaService {
         for (int i = 0; i < limite; i++) {
             Dia agora = nova.dias().get(i);
             Dia antes = diasAnteriores.get(agora.data());
+            if (antes == null) {
+                continue;
+            }
 
-            if (antes == null || !houveMudanca(antes, agora, diasComAlertaNovo)) {
+            AlertaClima alertaNovo = alertasNovos.get(agora.data());
+            MotivoMudanca motivo = motivoDa(antes, agora, alertaNovo);
+            if (motivo == null) {
                 continue;
             }
 
@@ -52,24 +60,32 @@ public class DetectorMudancaService {
             if (endereco == null) {
                 endereco = enderecoRepository.getReferenceById(nova.enderecoId());
             }
-            registrar(endereco, agora.data(), antes, agora, nova.atualizadoEm());
-
-            log.info("Mudanca brusca no endereco {} para o dia {}: {} -> {}",
-                    nova.enderecoId(), agora.data(), resumo(antes), resumo(agora));
+            registrar(endereco, agora.data(), motivo, antes, agora, alertaNovo, nova.atualizadoEm());
         }
     }
 
     // ---------- Regras ----------
 
-    // O quarto gatilho: surgiu um alerta novo naquele dia.
-    // O conjunto ja vem sem o dia de hoje, filtrado na feature 80
-    private boolean houveMudanca(Dia antes, Dia agora, Set<LocalDate> diasComAlertaNovo) {
-        return variouTemperatura(antes.maxima(), agora.maxima())
-                || variouTemperatura(antes.minima(), agora.minima())
-                || chuvaDisparou(antes.chanceChuvaMaxima(), agora.chanceChuvaMaxima())
-                || mudouDeGrupo(antes.categoria(), agora.categoria())
-                || diasComAlertaNovo.contains(agora.data());
+    // A ORDEM DESTAS VERIFICACOES E A PRIORIDADE, igual a ordem do enum:
+    // ALERTA > CEU > CHUVA > TEMPERATURA. O card e um so, entao um motivo ganha.
+    // Devolve null quando nada mudou o suficiente.
+    private MotivoMudanca motivoDa(Dia antes, Dia agora, AlertaClima alertaNovo) {
+        if (alertaNovo != null) {
+            return MotivoMudanca.ALERTA;
+        }
+        if (mudouDeGrupo(antes.categoria(), agora.categoria())) {
+            return MotivoMudanca.CEU;
+        }
+        if (chuvaDisparou(antes.chanceChuvaMaxima(), agora.chanceChuvaMaxima())) {
+            return MotivoMudanca.CHUVA;
+        }
+        if (variouTemperatura(antes.maxima(), agora.maxima())
+                || variouTemperatura(antes.minima(), agora.minima())) {
+            return MotivoMudanca.TEMPERATURA;
+        }
+        return null;
     }
+
     // A maxima ou a minima mudou 4 graus ou mais
     private boolean variouTemperatura(Double antes, Double agora) {
         return antes != null && agora != null && Math.abs(agora - antes) >= VARIACAO_TEMPERATURA;
@@ -92,10 +108,10 @@ public class DetectorMudancaService {
     private enum GrupoCeu { SECO, CHUVOSO, INDEFINIDO }
 
     // Dois grupos apenas, aprovados pelo planejamento:
-    // SECO  = WMO 0-3, 45, 48        CHUVOSO = WMO 51-67, 71-77, 80-86, 95-99
-    // A tempestade fica no grupo CHUVOSO porque o codigo WMO diario oscila muito
-    // entre chuva e tempestade: com ela separada, um unico ciclo gerou 26 cards
-    // de ruido no teste. Tempestade sempre gera alerta ALTA, entao o gatilho
+    // SECO = WMO 0-3, 45, 48        CHUVOSO = WMO 51-67, 71-77, 80-86, 95-99
+    // Trocas dentro do mesmo grupo (sol -> nublado, chuva -> tempestade) nao
+    // sao mudanca: com a tempestade separada, um unico ciclo gerou 26 cards de
+    // ruido no teste. Tempestade sempre gera alerta ALTA, entao o gatilho
     // "surgiu um alerta novo" cobre esse caso com a gravidade certa.
     private GrupoCeu grupo(CategoriaClima categoria) {
         return switch (categoria) {
@@ -107,16 +123,37 @@ public class DetectorMudancaService {
 
     // ---------- Gravacao ----------
 
-    private void registrar(Endereco endereco, LocalDate dia, Dia antes, Dia agora, Instant registradoEm) {
-        String textoAntes = resumo(antes);
-        String textoAgora = resumo(agora);
+    private void registrar(Endereco endereco, LocalDate dia, MotivoMudanca motivo,
+                           Dia antes, Dia agora, AlertaClima alertaNovo, Instant registradoEm) {
+
+        Optional<MudancaPrevisao> existente =
+                mudancaRepository.findByEnderecoIdAndDia(endereco.getId(), dia);
+
+        if (motivo == MotivoMudanca.ALERTA) {
+            existente.ifPresentOrElse(
+                    m -> m.substituirPorAlerta(alertaNovo.getTipo(), alertaNovo.getGravidade(),
+                            registradoEm),
+                    () -> mudancaRepository.save(MudancaPrevisao.deAlerta(endereco, dia,
+                            alertaNovo.getTipo(), alertaNovo.getGravidade(), registradoEm)));
+
+            log.info("Mudanca brusca no endereco {} para o dia {} (ALERTA): novo alerta de {} {}",
+                    endereco.getId(), dia, alertaNovo.getTipo(), alertaNovo.getGravidade());
+            return;
+        }
+
+        String textoAntes = resumo(antes, motivo);
+        String textoAgora = resumo(agora, motivo);
         CategoriaClima categoriaAntes = categoria(antes);
         CategoriaClima categoriaAgora = categoria(agora);
 
-        mudancaRepository.findByEnderecoIdAndDia(endereco.getId(), dia).ifPresentOrElse(
-                m -> m.substituir(textoAntes, categoriaAntes, textoAgora, categoriaAgora, registradoEm),
-                () -> mudancaRepository.save(new MudancaPrevisao(endereco, dia,
+        existente.ifPresentOrElse(
+                m -> m.substituirPorTexto(motivo, textoAntes, categoriaAntes,
+                        textoAgora, categoriaAgora, registradoEm),
+                () -> mudancaRepository.save(MudancaPrevisao.deTexto(endereco, dia, motivo,
                         textoAntes, categoriaAntes, textoAgora, categoriaAgora, registradoEm)));
+
+        log.info("Mudanca brusca no endereco {} para o dia {} ({}): {} -> {}",
+                endereco.getId(), dia, motivo, textoAntes, textoAgora);
     }
 
     // ---------- Auxiliares ----------
@@ -129,9 +166,17 @@ public class DetectorMudancaService {
         return mapa;
     }
 
-    // "27° e sol"
-    private String resumo(Dia dia) {
+    // CEU e TEMPERATURA: "27° e sol".  CHUVA: "25°, 70% de chuva",
+    // porque nesse caso o que mudou foi a porcentagem, nao o ceu
+    private String resumo(Dia dia, MotivoMudanca motivo) {
         String temperatura = dia.maxima() == null ? "--" : Math.round(dia.maxima()) + "°";
+
+        if (motivo == MotivoMudanca.CHUVA) {
+            String chance = dia.chanceChuvaMaxima() == null
+                    ? "--"
+                    : String.valueOf(dia.chanceChuvaMaxima());
+            return temperatura + ", " + chance + "% de chuva";
+        }
         return temperatura + " e " + categoria(dia).getResumo();
     }
 

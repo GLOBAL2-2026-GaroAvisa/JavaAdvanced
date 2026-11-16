@@ -86,16 +86,19 @@ public class AlertaClimaService {
 
     /**
      * Concilia o que as regras calcularam com o que ja esta guardado.
-     * Devolve os DIAS em que um alerta NASCEU agora, de amanha em diante:
-     * e o quarto gatilho da feature 21.
+     *
+     * Devolve, por dia, o alerta mais grave que NASCEU agora, de amanha em
+     * diante: e o quarto gatilho da feature 21. O card precisa do tipo e da
+     * gravidade para escrever "Novo alerta: tempestade no sabado", por isso
+     * devolve o alerta inteiro e nao so a data.
      */
-    public Set<LocalDate> gerar(PrevisaoAtualizadaEvento evento) {
+    public Map<LocalDate, AlertaClima> gerar(PrevisaoAtualizadaEvento evento) {
         LocalDate hoje = LocalDate.now(ZoneId.of(evento.fuso()));
         List<AlertaCalculado> calculados = calcular(evento);
         Map<Chave, AlertaClima> existentes = carregarExistentes(evento.enderecoId());
 
         Set<Chave> vivos = new HashSet<>();
-        Set<LocalDate> diasComAlertaNovo = new HashSet<>();
+        Map<LocalDate, AlertaClima> alertasNovos = new HashMap<>();
         Endereco endereco = null;
 
         for (AlertaCalculado calculado : calculados) {
@@ -115,14 +118,18 @@ public class AlertaClimaService {
             if (endereco == null) {
                 endereco = enderecoRepository.getReferenceById(evento.enderecoId());
             }
-            alertaRepository.save(new AlertaClima(endereco, calculado.tipo(), calculado.dia(),
-                    calculado.gravidade(), calculado.valor(), calculado.primeiraHora(),
-                    evento.atualizadoEm()));
+            AlertaClima novo = alertaRepository.save(new AlertaClima(endereco,
+                    calculado.tipo(), calculado.dia(), calculado.gravidade(),
+                    calculado.valor(), calculado.primeiraHora(), evento.atualizadoEm()));
 
             // Alerta novo de HOJE nao vira mudanca brusca: ele ja gera um aviso
-            // de origem DIA, e contar os dois seria o mesmo fato duas vezes
+            // de origem DIA, e contar os dois seria o mesmo fato duas vezes.
+            // Nascendo mais de um no mesmo dia, o card mostra o mais grave
             if (calculado.dia().isAfter(hoje)) {
-                diasComAlertaNovo.add(calculado.dia());
+                AlertaClima atual = alertasNovos.get(calculado.dia());
+                if (atual == null || novo.getGravidade().compareTo(atual.getGravidade()) > 0) {
+                    alertasNovos.put(calculado.dia(), novo);
+                }
             }
 
             log.info("Alerta novo no endereco {}: {} {} em {} (valor {}, a partir das {}h)",
@@ -142,7 +149,7 @@ public class AlertaClimaService {
             }
         }
 
-        return diasComAlertaNovo;
+        return alertasNovos;
     }
 
     // ---------- Regras ----------
