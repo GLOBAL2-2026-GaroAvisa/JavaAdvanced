@@ -14,7 +14,7 @@ public record PrevisaoResponse(
         ClimaAtual climaAtual,
         List<HoraResponse> previsaoPorHora,
         List<DiaResponse> previsaoDiaria,
-        List<Object> alertas,
+        List<AlertaResponse> alertas,
         List<MudancaResponse> mudancasNaPrevisao) {
 
     public record LocalResumo(

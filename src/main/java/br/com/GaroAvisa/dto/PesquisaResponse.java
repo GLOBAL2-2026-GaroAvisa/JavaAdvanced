@@ -10,5 +10,5 @@ public record PesquisaResponse(
         List<PrevisaoResponse.HoraResponse> previsaoPorHora,
         List<PrevisaoResponse.DiaResponse> previsaoDiaria,
         String explicacaoDoDia,
-        List<Object> alertas) {
+        List<AlertaResponse> alertas) {
 }

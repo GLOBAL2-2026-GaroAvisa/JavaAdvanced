@@ -4,6 +4,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Set;
 
 import org.springframework.stereotype.Service;
 
@@ -33,7 +34,7 @@ public class DetectorMudancaService {
     private final EnderecoRepository enderecoRepository;
     private final MudancaPrevisaoRepository mudancaRepository;
 
-    public void detectar(PrevisaoAtualizadaEvento anterior, PrevisaoAtualizadaEvento nova) {
+    public void detectar(PrevisaoAtualizadaEvento anterior, PrevisaoAtualizadaEvento nova, Set<LocalDate> diasComAlertaNovo) {
 
         Map<LocalDate, Dia> diasAnteriores = porData(anterior);
         int limite = Math.min(DIAS, nova.dias().size());
@@ -43,7 +44,7 @@ public class DetectorMudancaService {
             Dia agora = nova.dias().get(i);
             Dia antes = diasAnteriores.get(agora.data());
 
-            if (antes == null || !houveMudanca(antes, agora)) {
+            if (antes == null || !houveMudanca(antes, agora, diasComAlertaNovo)) {
                 continue;
             }
 
@@ -60,16 +61,15 @@ public class DetectorMudancaService {
 
     // ---------- Regras ----------
 
-    // Falta o quarto gatilho, "surge um alerta novo", que depende da feature 80.
-    // Quando entrar, ele vale so de AMANHA em diante: um alerta novo para hoje
-    // ja gera um aviso de origem DIA, e contar os dois seria o mesmo fato duas vezes.
-    private boolean houveMudanca(Dia antes, Dia agora) {
+    // O quarto gatilho: surgiu um alerta novo naquele dia.
+    // O conjunto ja vem sem o dia de hoje, filtrado na feature 80
+    private boolean houveMudanca(Dia antes, Dia agora, Set<LocalDate> diasComAlertaNovo) {
         return variouTemperatura(antes.maxima(), agora.maxima())
                 || variouTemperatura(antes.minima(), agora.minima())
                 || chuvaDisparou(antes.chanceChuvaMaxima(), agora.chanceChuvaMaxima())
-                || mudouDeGrupo(antes.categoria(), agora.categoria());
+                || mudouDeGrupo(antes.categoria(), agora.categoria())
+                || diasComAlertaNovo.contains(agora.data());
     }
-
     // A maxima ou a minima mudou 4 graus ou mais
     private boolean variouTemperatura(Double antes, Double agora) {
         return antes != null && agora != null && Math.abs(agora - antes) >= VARIACAO_TEMPERATURA;

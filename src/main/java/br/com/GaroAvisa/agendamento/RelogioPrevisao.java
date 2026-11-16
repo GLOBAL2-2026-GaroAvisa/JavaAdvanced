@@ -10,6 +10,7 @@ import org.springframework.stereotype.Component;
 
 import br.com.GaroAvisa.evento.EnderecoParaPrevisao;
 import br.com.GaroAvisa.mensageria.PrevisaoSolicitadaPublisher;
+import br.com.GaroAvisa.repository.AlertaClimaRepository;
 import br.com.GaroAvisa.repository.EnderecoRepository;
 import br.com.GaroAvisa.repository.MudancaPrevisaoRepository;
 import jakarta.transaction.Transactional;
@@ -24,11 +25,16 @@ public class RelogioPrevisao {
     private final EnderecoRepository enderecoRepository;
     private final PrevisaoSolicitadaPublisher publisher;
     private final MudancaPrevisaoRepository mudancaRepository;
-
+    private final AlertaClimaRepository alertaRepository;
+    
     // 1 minuto depois de subir e, depois, de hora em hora
     @Transactional
     @Scheduled(initialDelay = 1, fixedRate = 60, timeUnit = TimeUnit.MINUTES)
     public void solicitarPrevisoes() {
+        // Limpeza do que se refere a dias que ja passaram
+        LocalDate hoje = LocalDate.now(ZoneId.of("America/Sao_Paulo"));
+        
+        alertaRepository.apagarAntesDe(hoje);
     		mudancaRepository.apagarAntesDe(LocalDate.now(ZoneId.of("America/Sao_Paulo")));
         
         List<EnderecoParaPrevisao> enderecos = enderecoRepository.listarEmUsoParaPrevisao();

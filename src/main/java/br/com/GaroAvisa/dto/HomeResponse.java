@@ -11,7 +11,7 @@ public record HomeResponse(
         PrevisaoResponse.ClimaAtual climaAtual,
         List<PrevisaoResponse.HoraResponse> previsaoPorHora,
         String explicacaoDoDia,
-        List<Object> alertas,
+        List<AlertaResponse> alertas,
         List<Object> dicas,
         List<MudancaResponse> mudancasNaPrevisao,
         List<CompromissoResponse> compromissos) {

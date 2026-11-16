@@ -9,6 +9,7 @@ import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import br.com.GaroAvisa.dto.AlertaResponse;
 import br.com.GaroAvisa.dto.CompromissoResponse;
 import br.com.GaroAvisa.dto.HomeResponse;
 import br.com.GaroAvisa.dto.MudancaResponse;
@@ -54,7 +55,7 @@ public class HomeService {
                     null,       // climaAtual
                     List.of(),  // previsaoPorHora
                     null,       // explicacaoDoDia: feature 23
-                    List.of(),  // alertas: feature 18
+                    List.of(),  // alertas
                     List.of(),  // dicas: feature 20
                     mudancas,   // feature 21
                     compromissos);
@@ -68,11 +69,24 @@ public class HomeService {
                 previsao.atualizadoEm(),
                 previsao.climaAtual(),
                 previsao.previsaoPorHora().stream().limit(HORAS_HOME).toList(),
-                null,       // explicacaoDoDia: feature 23
-                List.of(),  // alertas: feature 18
-                List.of(),  // dicas: feature 20
-                mudancas,   // feature 21
+                null,                       // explicacaoDoDia: feature 23
+                alertasDeHoje(previsao),    // feature 18
+                List.of(),                  // dicas: feature 20
+                mudancas,                   // feature 21
                 compromissos);
+    }
+
+    // Feature 18: a Home mostra so os alertas de HOJE do local principal.
+    // Os Detalhes ja trouxeram hoje e os proximos dias, entao aqui e so filtrar:
+    // uma ida a menos ao banco
+    private List<AlertaResponse> alertasDeHoje(PrevisaoResponse previsao) {
+        if (previsao.local() == null || previsao.local().fuso() == null) {
+            return List.of();
+        }
+        LocalDate hoje = LocalDate.now(ZoneId.of(previsao.local().fuso()));
+        return previsao.alertas().stream()
+                .filter(alerta -> alerta.dia().equals(hoje))
+                .toList();
     }
 
     // As mudancas sao guardadas por endereco. A Home traz as de todos os locais

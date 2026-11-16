@@ -7,11 +7,13 @@ import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import br.com.GaroAvisa.cliente.ClimaClient;
+import br.com.GaroAvisa.dto.AlertaResponse;
 import br.com.GaroAvisa.dto.MudancaResponse;
 import br.com.GaroAvisa.dto.PesquisaResponse;
 import br.com.GaroAvisa.dto.PrevisaoResponse;
@@ -62,6 +64,8 @@ public class PrevisaoService {
     private final DetectorMudancaService detector;
     private final MudancaPrevisaoRepository mudancaRepository;
     private final ClimaClient climaClient;
+    private final AlertaClimaService alertaService;
+    
 
  // ---------- Consumidor do evento PrevisaoAtualizada ----------
 
@@ -71,8 +75,10 @@ public class PrevisaoService {
 
         Previsao previsao = previsaoRepository.findById(evento.enderecoId()).orElse(null);
 
+        // Primeira previsao do endereco: gera os alertas, mas nao ha com que comparar
         if (previsao == null) {
             previsaoRepository.save(new Previsao(evento.enderecoId(), json, evento.atualizadoEm()));
+            alertaService.gerar(evento);
             return;
         }
 
@@ -80,9 +86,12 @@ public class PrevisaoService {
             log.info("Previsao do endereco {} ignorada: a guardada e igual ou mais nova", evento.enderecoId());
             return;
         }
-        
+
+        // Feature 80 ANTES da 21: o detector precisa saber quais alertas nasceram agora
+        Set<LocalDate> diasComAlertaNovo = alertaService.gerar(evento);
+
         // Feature 21: compara ANTES de substituir, enquanto as duas versoes existem
-        detector.detectar(deJson(previsao.getDados()), evento);
+        detector.detectar(deJson(previsao.getDados()), evento, diasComAlertaNovo);
 
         previsao.atualizar(json, evento.atualizadoEm());
     }
@@ -114,13 +123,17 @@ public class PrevisaoService {
 
         PrevisaoAtualizadaEvento dados = deJson(previsao.getDados());
         
+        LocalDate hoje = LocalDate.now(ZoneId.of(endereco.getFuso()));
+
         // As mudancas sao do ENDERECO; o Local entra so para o card mostrar o apelido
         List<MudancaResponse> mudancas = mudancaRepository
-                .buscarDosEnderecos(List.of(endereco.getId()),
-                                    LocalDate.now(ZoneId.of(endereco.getFuso())))
+                .buscarDosEnderecos(List.of(endereco.getId()), hoje)
                 .stream()
                 .map(m -> MudancaResponse.de(m, local))
                 .toList();
+
+        // Feature 15: alertas de hoje E dos proximos dias
+        List<AlertaResponse> alertas = alertaService.buscarDoEndereco(endereco.getId(), hoje);
 
         return new PrevisaoResponse(
                 resumo,
@@ -128,8 +141,8 @@ public class PrevisaoService {
                 montarClimaAtual(dados),
                 montarHoras(dados),
                 montarDias(dados),
-                List.of(),  // alertas: Epic 5
-                mudancas); // mudancas na previsao: feature 21
+                alertas,
+                mudancas);
     }
     
     
@@ -148,7 +161,7 @@ public class PrevisaoService {
                 montarHoras(dados).stream().limit(HORAS_PESQUISA).toList(),
                 montarDias(dados),
                 null,
-                List.of());
+                alertaService.avaliarDeHoje(dados));
     }
 
     private void validarCoordenadas(BigDecimal latitude, BigDecimal longitude) {
