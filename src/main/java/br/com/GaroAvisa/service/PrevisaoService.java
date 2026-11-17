@@ -14,6 +14,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import br.com.GaroAvisa.cliente.ClimaClient;
 import br.com.GaroAvisa.dto.AlertaResponse;
+import br.com.GaroAvisa.dto.ExplicacaoResponse;
 import br.com.GaroAvisa.dto.MudancaResponse;
 import br.com.GaroAvisa.dto.PesquisaResponse;
 import br.com.GaroAvisa.dto.PrevisaoResponse;
@@ -66,6 +67,7 @@ public class PrevisaoService {
     private final MudancaPrevisaoRepository mudancaRepository;
     private final ClimaClient climaClient;
     private final AlertaClimaService alertaService;
+    private final ExplicacaoDiaService explicacaoService;
     
     
     // A Home precisa dos dados crus para calcular as dicas (feature 20).
@@ -170,14 +172,35 @@ public class PrevisaoService {
 
         PrevisaoAtualizadaEvento dados = climaClient.buscar(latitude, longitude, fusoValidado);
 
+
+        LocalDate hoje = LocalDate.now(ZoneId.of(fusoValidado));
+        List<AlertaResponse> alertas = alertaService.avaliarDeHoje(dados);
+        
+        // Feature 23: na Pesquisa a explicacao e gerada DENTRO desta resposta.
+        // A tela ja esta num carregamento por causa do clima, entao aproveitamos
+        // a espera em vez de obrigar o app a uma segunda ida ao Servico de Clima.
+        // Sem "Sobre mim": o criterio diz que na Pesquisa a IA nao personaliza
+        ExplicacaoResponse explicacao = explicacaoService.obter(
+                ExplicacaoDiaService.chaveDaPesquisa(latitude, longitude, hoje),
+                null,          // sem usuario: o texto vale para todo mundo
+                hoje,
+                null,          // sem o nome do lugar: quem o tem e o app
+                null,          // sem perfil
+                ExplicacaoDiaService.diaDe(dados, hoje),
+                ExplicacaoDiaService.horasDe(dados, hoje),
+                alertas);
+
         return new PesquisaResponse(
                 dados.atualizadoEm(),
                 montarClimaAtual(dados),
                 montarHoras(dados).stream().limit(HORAS_PESQUISA).toList(),
                 montarDias(dados),
-                null,
-                alertaService.avaliarDeHoje(dados));
+                explicacao.texto(),
+                explicacao.geradaPorIa(),
+                alertas);
     }
+    
+    
 
     private void validarCoordenadas(BigDecimal latitude, BigDecimal longitude) {
         boolean latitudeFora = latitude.compareTo(LATITUDE_MINIMA) < 0

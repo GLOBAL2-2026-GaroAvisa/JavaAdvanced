@@ -11,6 +11,7 @@ import br.com.GaroAvisa.dto.UsuarioResponse;
 import br.com.GaroAvisa.exception.RecursoNaoEncontradoException;
 import br.com.GaroAvisa.exception.SenhaInvalidaException;
 import br.com.GaroAvisa.model.Usuario;
+import br.com.GaroAvisa.repository.ExplicacaoDiaRepository;
 import br.com.GaroAvisa.repository.UsuarioRepository;
 import lombok.RequiredArgsConstructor;
 
@@ -20,6 +21,7 @@ public class UsuarioService {
 
     private final UsuarioRepository usuarioRepository;
     private final PasswordEncoder passwordEncoder;
+    private final ExplicacaoDiaRepository explicacaoRepository;
 
     @Transactional(readOnly = true)
     public UsuarioResponse buscar(Long usuarioId) {
@@ -38,8 +40,9 @@ public class UsuarioService {
         Usuario usuario = buscarUsuario(usuarioId);
         usuario.setPerfilIa(req.perfilIa());
 
-        // Feature 23: quando existir o cache da Explicação do Dia,
-        // apagar aqui os registros deste usuário
+        // Feature 23: o "Sobre mim" alimenta a IA, entao os textos guardados
+        // deste usuario deixam de valer
+        explicacaoRepository.apagarDoUsuario(usuarioId);
 
         return UsuarioResponse.de(usuario);
     }

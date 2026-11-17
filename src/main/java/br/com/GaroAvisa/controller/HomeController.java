@@ -6,6 +6,7 @@ import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import br.com.GaroAvisa.dto.ExplicacaoResponse;
 import br.com.GaroAvisa.dto.HomeResponse;
 import br.com.GaroAvisa.service.HomeService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -39,6 +40,21 @@ public class HomeController {
     @GetMapping("/home")
     public ResponseEntity<HomeResponse> buscar(@Parameter(hidden = true) @AuthenticationPrincipal Jwt jwt) {
         return ResponseEntity.ok(homeService.buscar(usuarioId(jwt)));
+    }
+    
+    @Operation(summary = "Explicação do Dia do local principal",
+            description = "Gera o texto se ainda não existir, e guarda para o resto do dia. "
+                    + "A Home devolve explicacaoDoDia nulo quando o texto ainda não foi gerado; "
+                    + "é então que o app chama este endpoint.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Texto do dia"),
+            @ApiResponse(responseCode = "401", description = "Token ausente ou inválido", content = @Content),
+            @ApiResponse(responseCode = "404", description = "Sem local principal", content = @Content)
+    })
+    @GetMapping("/home/explicacao")
+    public ResponseEntity<ExplicacaoResponse> explicacao(@AuthenticationPrincipal Jwt jwt) {
+        Long usuarioId = Long.valueOf(jwt.getSubject());
+        return ResponseEntity.ok(homeService.explicacaoDoPrincipal(usuarioId));
     }
 
     private Long usuarioId(Jwt jwt) {

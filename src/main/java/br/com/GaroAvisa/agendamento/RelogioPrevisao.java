@@ -12,6 +12,7 @@ import br.com.GaroAvisa.evento.EnderecoParaPrevisao;
 import br.com.GaroAvisa.mensageria.PrevisaoSolicitadaPublisher;
 import br.com.GaroAvisa.repository.AlertaClimaRepository;
 import br.com.GaroAvisa.repository.EnderecoRepository;
+import br.com.GaroAvisa.repository.ExplicacaoDiaRepository;
 import br.com.GaroAvisa.repository.MudancaPrevisaoRepository;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
@@ -26,6 +27,7 @@ public class RelogioPrevisao {
     private final PrevisaoSolicitadaPublisher publisher;
     private final MudancaPrevisaoRepository mudancaRepository;
     private final AlertaClimaRepository alertaRepository;
+    private final ExplicacaoDiaRepository explicacaoRepository;
     
     // 1 minuto depois de subir e, depois, de hora em hora
     @Transactional
@@ -36,6 +38,7 @@ public class RelogioPrevisao {
         
         alertaRepository.apagarAntesDe(hoje);
     		mudancaRepository.apagarAntesDe(LocalDate.now(ZoneId.of("America/Sao_Paulo")));
+            explicacaoRepository.apagarAntesDe(hoje);
         
         List<EnderecoParaPrevisao> enderecos = enderecoRepository.listarEmUsoParaPrevisao();
 
